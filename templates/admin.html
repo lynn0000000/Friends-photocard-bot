@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>有點東西 管理後台</title>
+    <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: sans-serif; background: #f5f5f5; }
+    .header { background: #adf0e0; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .header h1 { color: #1a6b5a; font-size: 18px; }
+    .header a { color: #1a6b5a; text-decoration: none; font-size: 14px; }
+    .container { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
+    .folder-card { background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+    .folder-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 4px; }
+    .folder-title { font-size: 15px; font-weight: 500; }
+    .folder-count { font-size: 13px; color: #888; }
+    .photos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 8px; margin-bottom: 12px; }
+    .photo-item { position: relative; }
+    .photo-item img { width: 100%; height: 80px; object-fit: cover; border-radius: 8px; }
+    .delete-btn { position: absolute; top: 4px; right: 4px; background: rgba(255,0,0,0.8); color: #fff; border: none; border-radius: 50%; width: 22px; height: 22px; cursor: pointer; font-size: 12px; }
+    .upload-area { border: 2px dashed #ddd; border-radius: 8px; padding: 16px; text-align: center; cursor: pointer; transition: border-color 0.2s; }
+    .upload-area:hover { border-color: #adf0e0; }
+    .upload-area input { display: none; }
+    .upload-btn { background: #adf0e0; color: #1a6b5a; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; margin-top: 8px; }
+    .toast { position: fixed; bottom: 24px; right: 16px; left: 16px; background: #333; color: #fff; padding: 12px 20px; border-radius: 8px; display: none; text-align: center; }
+
+    @media (max-width: 600px) {
+        .header { padding: 12px 16px; }
+        .header h1 { font-size: 15px; }
+        .photos-grid { grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); }
+        .photo-item img { height: 70px; }
+    }
+</style>
+</head>
+
+<body>
+    <div class="header">
+    <h1>🎴  有點東西 管理後台</h1>
+    <div>
+        <a href="/admin/labels" style="color:#1a6b5a; text-decoration:none; margin-left:16px;">管理按鈕</a>
+        <a href="/admin/logout" style="color:#1a6b5a; text-decoration:none; margin-left:16px;">登出</a>
+    </div>
+    </div>
+    <div class="container">
+        {% for folder, info in folder_info.items() %}
+        <div class="folder-card">
+            <div class="folder-header">
+                <div class="folder-title">{{ info.name }}</div>
+                <div class="folder-count">共 {{ info.count }} 張</div>
+            </div>
+            <div class="photos-grid" id="grid-{{ folder }}">
+                {% for photo in info.photos %}
+                <div class="photo-item" id="photo-{{ photo.id | replace('/', '-') }}">
+                    <img src="{{ photo.url }}" alt="">
+                    <button class="delete-btn" onclick="deletePhoto('{{ photo.id }}', '{{ photo.id | replace('/', '-') }}')">✕</button>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="upload-area" onclick="document.getElementById('upload-{{ folder }}').click()">
+                <input type="file" id="upload-{{ folder }}" multiple accept="image/*" onchange="uploadPhotos('{{ folder }}', this)">
+                <div>點擊或拖曳上傳照片</div>
+                <button class="upload-btn">選擇照片</button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="toast" id="toast"></div>
+
+    <script>
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.style.display = 'block';
+            setTimeout(() => t.style.display = 'none', 2500);
+        }
+
+        async function uploadPhotos(folder, input) {
+            const files = input.files;
+            if (!files.length) return;
+            
+            const formData = new FormData();
+            formData.append('folder', folder);
+            for (const file of files) {
+                formData.append('photos', file);
+            }
+            
+            showToast('上傳中...');
+            const res = await fetch('/admin/upload', { method: 'POST', body: formData });
+            const data = await res.json();
+            
+            if (data.success) {
+                showToast(`成功上傳 ${data.uploaded} 張！重新整理頁面查看`);
+                setTimeout(() => location.reload(), 1500);
+            }
+        }
+
+        async function deletePhoto(publicId, elemId) {
+            if (!confirm('確定要刪除這張照片嗎？')) return;
+            
+            const formData = new FormData();
+            formData.append('public_id', publicId);
+            
+            const res = await fetch('/admin/delete', { method: 'POST', body: formData });
+            const data = await res.json();
+            
+            if (data.success) {
+                document.getElementById('photo-' + elemId).remove();
+                showToast('已刪除！');
+            }
+        }
+    </script>
+</body>
+</html>

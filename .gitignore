@@ -1,0 +1,12 @@
+# 敏感設定
+card_urls.json
+source_urls.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# 暫存檔案
+cards/

@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理按鈕</title>
+    <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: sans-serif; background: #f5f5f5; }
+    .header { background: #adf0e0; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .header h1 { color: #1a6b5a; font-size: 16px; }
+    .header a { color: #1a6b5a; text-decoration: none; font-size: 13px; margin-left: 12px; }
+    .container { max-width: 900px; margin: 16px auto; padding: 0 12px; }
+
+    .level-0 { background: #fff; border-radius: 12px; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
+    .level-1 { background: #f8f8f8; border-radius: 8px; margin: 6px 10px; overflow: hidden; }
+    .level-2 { background: #f0f0f0; border-radius: 6px; margin: 4px 10px; overflow: hidden; }
+
+    .row { display: flex; align-items: center; gap: 6px; padding: 10px 12px; flex-wrap: wrap; }
+    .row input { flex: 1; min-width: 80px; padding: 7px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
+    .row-label { font-size: 11px; color: #888; white-space: nowrap; width: 32px; }
+    .row-inputs { display: flex; gap: 6px; flex: 1; flex-wrap: wrap; }
+    .row-inputs input { flex: 1; min-width: 80px; padding: 7px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
+    .row-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+
+    .btn { border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; white-space: nowrap; }
+    .btn-save { background: #adf0e0; color: #1a6b5a; }
+    .btn-delete { background: #ff4444; color: #fff; }
+    .btn-add { background: #333; color: #fff; }
+    .btn-toggle { background: #e8e8e8; color: #333; }
+    .btn-toggle.open { background: #adf0e0; color: #1a6b5a; }
+
+    .children { display: none; padding-bottom: 6px; }
+    .children.open { display: block; }
+
+    .add-row { display: flex; gap: 6px; padding: 8px 12px; background: rgba(0,0,0,0.02); border-top: 1px solid #eee; flex-wrap: wrap; align-items: center; }
+    .add-row input { flex: 1; min-width: 80px; padding: 7px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
+
+    .toast { position: fixed; bottom: 16px; right: 16px; left: 16px; background: #333; color: #fff; padding: 12px 16px; border-radius: 8px; display: none; z-index: 999; text-align: center; }
+    .main-add { padding: 12px; border-top: 1px solid #eee; display: flex; gap: 6px; flex-wrap: wrap; }
+    .main-add input { flex: 1; min-width: 80px; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
+    select { padding: 7px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; background: #fff; max-width: 120px; }
+
+    @media (max-width: 600px) {
+        .header h1 { font-size: 14px; }
+        .row { flex-direction: column; align-items: stretch; }
+        .row-label { width: auto; }
+        .row-inputs { flex-direction: column; }
+        .row-inputs input { width: 100%; }
+        .row-btns { width: 100%; }
+        .row-btns .btn { flex: 1; text-align: center; padding: 8px; }
+        select { max-width: 100%; width: 100%; }
+        .add-row { flex-direction: column; }
+        .add-row input { width: 100%; }
+        .add-row .btn-add { width: 100%; padding: 8px; text-align: center; }
+        .main-add { flex-direction: column; }
+        .main-add input { width: 100%; }
+        .main-add .btn-add { width: 100%; padding: 8px; }
+        .btn-toggle { width: 100%; text-align: center; }
+    }
+    </style>
+</head>
+<body>
+<div class="header">
+    <h1>🎴 管理 LINE 按鈕</h1>
+    <div>
+        <a href="/admin">← 回管理首頁</a>
+        <a href="/admin/logout">登出</a>
+    </div>
+</div>
+
+<div class="container">
+    <div class="level-0">
+        <div style="padding:16px; border-bottom:1px solid #eee;">
+            <div style="font-size:16px; font-weight:500; margin-bottom:4px;">主選單按鈕</div>
+            <div style="font-size:12px; color:#888;">⚠️ LINE 最多顯示 13 個按鈕</div>
+        </div>
+
+        {% for i, item in config.main_labels | enumerate_filter %}
+        <div class="level-0" style="margin:8px 16px; box-shadow:none; border:1px solid #eee;">
+            <div class="row">
+                <span class="row-label">按鈕</span>
+                <div class="row-inputs">
+                    <input type="text" value="{{ item.label }}" id="main-label-{{ i }}" placeholder="按鈕文字">
+                    <input type="text" value="{{ item.text }}" id="main-text-{{ i }}" placeholder="觸發指令">
+                </div>
+                <div class="row-btns">
+                    <button class="btn btn-save" onclick="updateMain({{ i }})">儲存</button>
+                    <button class="btn btn-delete" onclick="deleteMain({{ i }})">刪除</button>
+                    <button class="btn btn-toggle" id="toggle-main-{{ i }}" onclick="toggleMain({{ i }}, '{{ item.text }}')">▼ 子選單</button>
+                </div>
+            </div>
+
+            <div class="children" id="children-main-{{ i }}">
+                {% set sub_items = config.menus.get(item.text, []) %}
+                {% for j, sub in sub_items | enumerate_filter %}
+                <div class="level-1" id="sub-{{ i }}-{{ j }}">
+                    <div class="row">
+                        <span class="row-label">子項</span>
+                        <div class="row-inputs">
+                            <input type="text" value="{{ sub.label }}" id="sub-label-{{ i }}-{{ j }}" placeholder="按鈕文字">
+                            <input type="text" value="{{ sub.text }}" id="sub-text-{{ i }}-{{ j }}" placeholder="觸發指令">
+                            <select id="sub-folder-{{ i }}-{{ j }}">
+                                <option value="">無資料夾</option>
+                                {% for f in folders %}
+                                <option value="{{ f.key }}" {% if sub.folder == f.key %}selected{% endif %}>{{ f.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="row-btns">
+                            <button class="btn btn-save" onclick="updateSub('{{ item.text }}', {{ i }}, {{ j }})">儲存</button>
+                            <button class="btn btn-delete" onclick="deleteSub('{{ item.text }}', {{ j }}, 'sub-{{ i }}-{{ j }}')">刪除</button>
+                            <button class="btn btn-toggle" id="toggle-sub-{{ i }}-{{ j }}" onclick="toggleSub({{ i }}, {{ j }}, '{{ item.text }}')">▼ 子子選單</button>
+                        </div>
+                    </div>
+
+                    <div class="children" id="children-sub-{{ i }}-{{ j }}">
+                        {% for k, child in sub.children | enumerate_filter %}
+                        <div class="level-2" id="subsub-{{ i }}-{{ j }}-{{ k }}">
+                            <div class="row">
+                                <span class="row-label">子子項</span>
+                                <div class="row-inputs">
+                                    <input type="text" value="{{ child.label }}" id="subsub-label-{{ i }}-{{ j }}-{{ k }}" placeholder="按鈕文字">
+                                    <input type="text" value="{{ child.text }}" id="subsub-text-{{ i }}-{{ j }}-{{ k }}" placeholder="觸發指令">
+                                    <select id="subsub-folder-{{ i }}-{{ j }}-{{ k }}">
+                                        <option value="">無資料夾</option>
+                                        {% for f in folders %}
+                                        <option value="{{ f.key }}" {% if child.folder == f.key %}selected{% endif %}>{{ f.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="row-btns">
+                                    <button class="btn btn-save" onclick="updateSubSub('{{ item.text }}', {{ j }}, {{ k }})">儲存</button>
+                                    <button class="btn btn-delete" onclick="deleteSubSub('{{ item.text }}', {{ j }}, {{ k }}, 'subsub-{{ i }}-{{ j }}-{{ k }}')">刪除</button>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+
+                        <div class="add-row">
+                            <span class="row-label">新增</span>
+                            <input type="text" placeholder="按鈕文字" id="new-subsub-label-{{ i }}-{{ j }}">
+                            <input type="text" placeholder="觸發指令" id="new-subsub-text-{{ i }}-{{ j }}">
+                            <select id="new-subsub-folder-{{ i }}-{{ j }}">
+                                <option value="">無資料夾</option>
+                                {% for f in folders %}
+                                <option value="{{ f.key }}">{{ f.name }}</option>
+                                {% endfor %}
+                            </select>
+                            <button class="btn btn-add" onclick="addSubSub('{{ item.text }}', {{ j }}, {{ i }}, {{ j }})">+ 新增</button>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+
+                <div class="add-row">
+                    <span class="row-label">新增</span>
+                    <input type="text" placeholder="按鈕文字" id="new-sub-label-{{ i }}">
+                    <input type="text" placeholder="觸發指令" id="new-sub-text-{{ i }}">
+                    <select id="new-sub-folder-{{ i }}">
+                        <option value="">無資料夾</option>
+                        {% for f in folders %}
+                        <option value="{{ f.key }}">{{ f.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <button class="btn btn-add" onclick="addSub('{{ item.text }}', {{ i }})">+ 新增子項</button>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+
+        <div class="main-add">
+            <input type="text" placeholder="新按鈕文字" id="new-main-label">
+            <input type="text" placeholder="觸發指令" id="new-main-text">
+            <button class="btn btn-add" onclick="addMain()">+ 新增主選單按鈕</button>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+    function showToast(msg) {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.style.display = 'block';
+        setTimeout(() => t.style.display = 'none', 2000);
+    }
+
+    function toggleMain(i, text) {
+        const el = document.getElementById(`children-main-${i}`);
+        const btn = document.getElementById(`toggle-main-${i}`);
+        el.classList.toggle('open');
+        btn.classList.toggle('open');
+        btn.textContent = el.classList.contains('open') ? '▲ 子選單' : '▼ 子選單';
+    }
+
+    function toggleSub(i, j, text) {
+        const el = document.getElementById(`children-sub-${i}-${j}`);
+        const btn = document.getElementById(`toggle-sub-${i}-${j}`);
+        el.classList.toggle('open');
+        btn.classList.toggle('open');
+        btn.textContent = el.classList.contains('open') ? '▲ 子子選單' : '▼ 子子選單';
+    }
+
+    async function post(url, data) {
+        const formData = new FormData();
+        for (const [k, v] of Object.entries(data)) formData.append(k, v);
+        const res = await fetch(url, { method: 'POST', body: formData });
+        return await res.json();
+    }
+
+    async function addMain() {
+        const label = document.getElementById('new-main-label').value;
+        const text = document.getElementById('new-main-text').value;
+        if (!label || !text) { showToast('請填寫完整！'); return; }
+        const data = await post('/admin/labels/main/add', { label, text });
+        if (data.success) { showToast('已新增！'); setTimeout(() => location.reload(), 800); }
+    }
+
+    async function updateMain(i) {
+        const label = document.getElementById(`main-label-${i}`).value;
+        const text = document.getElementById(`main-text-${i}`).value;
+        const data = await post('/admin/labels/main/update', { index: i, label, text });
+        if (data.success) showToast('已儲存！');
+    }
+
+    async function deleteMain(i) {
+        if (!confirm('確定刪除？')) return;
+        const data = await post('/admin/labels/main/delete', { index: i });
+        if (data.success) { showToast('已刪除！'); setTimeout(() => location.reload(), 800); }
+    }
+
+    async function addSub(parentText, i) {
+        const label = document.getElementById(`new-sub-label-${i}`).value;
+        const text = document.getElementById(`new-sub-text-${i}`).value;
+        const folder = document.getElementById(`new-sub-folder-${i}`).value;
+        if (!label || !text) { showToast('請填寫完整！'); return; }
+        const data = await post('/admin/labels/sub/add', { parent_text: parentText, label, text, folder });
+        if (data.success) { showToast('已新增！'); setTimeout(() => location.reload(), 800); }
+    }
+
+    async function updateSub(parentText, i, j) {
+        const labelEl = document.getElementById(`sub-label-${i}-${j}`);
+        const textEl = document.getElementById(`sub-text-${i}-${j}`);
+        const folderEl = document.getElementById(`sub-folder-${i}-${j}`);
+    
+        if (!labelEl || !textEl || !folderEl) {
+            showToast('找不到欄位，請重新整理！');
+            return;
+        }
+    
+        const data = await post('/admin/labels/sub/update', {
+            parent_text: parentText,
+            index: j,
+            label: labelEl.value,
+            text: textEl.value,
+            folder: folderEl.value
+        });
+        if (data.success) showToast('已儲存！');
+        else showToast('儲存失敗！');
+    }
+
+    async function deleteSub(parentText, j, elemId) {
+        if (!confirm('確定刪除？')) return;
+        const data = await post('/admin/labels/sub/delete', { parent_text: parentText, index: j });
+        if (data.success) { document.getElementById(elemId).remove(); showToast('已刪除！'); }
+    }
+
+    async function addSubSub(parentText, subIndex, i, j) {
+        const label = document.getElementById(`new-subsub-label-${i}-${j}`).value;
+        const text = document.getElementById(`new-subsub-text-${i}-${j}`).value;
+        const folder = document.getElementById(`new-subsub-folder-${i}-${j}`).value;
+        if (!label || !text) { showToast('請填寫完整！'); return; }
+        const data = await post('/admin/labels/subsub/add', { parent_text: parentText, sub_index: subIndex, label, text, folder });
+        if (data.success) { showToast('已新增！'); setTimeout(() => location.reload(), 800); }
+    }
+
+    async function updateSubSub(parentText, j, k) {
+        const label = document.querySelector(`[id^="subsub-label"][id$="${j}-${k}"]`).value;
+        const text = document.querySelector(`[id^="subsub-text"][id$="${j}-${k}"]`).value;
+        const folder = document.querySelector(`[id^="subsub-folder"][id$="${j}-${k}"]`).value;
+        const data = await post('/admin/labels/subsub/update', { parent_text: parentText, sub_index: j, child_index: k, label, text, folder });
+        if (data.success) showToast('已儲存！');
+    }
+
+    async function deleteSubSub(parentText, j, k, elemId) {
+        if (!confirm('確定刪除？')) return;
+        const data = await post('/admin/labels/subsub/delete', { parent_text: parentText, sub_index: j, child_index: k });
+        if (data.success) { document.getElementById(elemId).remove(); showToast('已刪除！'); }
+    }
+</script>
+</body>
+</html>
