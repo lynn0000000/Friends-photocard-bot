@@ -25,7 +25,6 @@ cloudinary.config(
     api_secret = "AuRL0GbacVjVqft9s1Smc9iQWsQ"
 )
 
-# 回覆文字設定區
 MSG_HELP = "🎴 有點東西 使用說明\n\n主選單按鈕直接點就好！"
 MSG_UNKNOWN = "敲什麼敲！點下方按鈕來抽卡啦 😤🎴"
 MSG_NO_PHOTO = "目前這個系列還沒有照片，請稍後再試！"
@@ -41,6 +40,17 @@ def get_photos(folder):
     except:
         return []
 
+def collect_photos_from_items(items):
+    """遞迴收集一組選單項目下所有照片"""
+    all_photos = []
+    for item in items:
+        folder = item.get("folder", "")
+        if folder:
+            all_photos.extend(get_photos(folder))
+        if item.get("children"):
+            all_photos.extend(collect_photos_from_items(item["children"]))
+    return all_photos
+
 def make_quick_reply(items):
     return QuickReply(items=[
         QuickReplyButton(action=MessageAction(label=item["label"], text=item["text"]))
@@ -49,20 +59,21 @@ def make_quick_reply(items):
 
 def main_quick_reply():
     config = load_config()
-    return make_quick_reply(config["main_labels"])
+    # 主選單加上「全部隨機」按鈕
+    labels = config["main_labels"] + [{"label": "🎲 全部隨機", "text": "__全部隨機__"}]
+    return make_quick_reply(labels)
 
 def find_menu_item(menus, text):
     for menu_key, items in menus.items():
         for item in items:
             if item["text"] == text:
-                return item
+                return item, menu_key, None
             for child in item.get("children", []):
                 if child["text"] == text:
-                    return child
-    return None
+                    return child, menu_key, item
+    return None, None, None
 
 def reply_with_photo(event, img_url):
-    """回傳照片 + 主選單快捷按鈕"""
     line_bot_api.reply_message(
         event.reply_token,
         ImageSendMessage(
@@ -72,70 +83,14 @@ def reply_with_photo(event, img_url):
         )
     )
 
-def handle_random(event, parent_text, menus):
-    if parent_text not in menus:
+def draw_random_from_photos(event, photos):
+    if not photos:
         line_bot_api.reply_message(
             event.reply_token,
             TextSendMessage(text=MSG_NO_PHOTO, quick_reply=main_quick_reply())
         )
         return
-
-    all_photos = []
-
-    def collect_all(items):
-        for item in items:
-            folder = item.get("folder", "")
-            if folder:
-                all_photos.extend(get_photos(folder))
-            if item.get("children"):
-                collect_all(item["children"])
-
-    collect_all(menus[parent_text])
-
-    if not all_photos:
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text=MSG_NO_PHOTO, quick_reply=main_quick_reply())
-        )
-        return
-
-    reply_with_photo(event, random.choice(all_photos))
-
-def handle_draw(event, menu_item, series_name):
-    children = menu_item.get("children", [])
-
-    if children:
-        random_btn = {"label": "🎲 隨機", "text": f"{series_name}_隨機"}
-        back_btn = {"label": "🔙 返回", "text": "說明"}
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(
-                text=f"請選擇{series_name}的系列：",
-                quick_reply=make_quick_reply(children + [random_btn, back_btn])
-            )
-        )
-    else:
-        folder = menu_item.get("folder", "")
-
-        if folder == "":
-            config = load_config()
-            all_photos = []
-            for items in config.get("menus", {}).values():
-                for item in items:
-                    if item.get("folder"):
-                        all_photos.extend(get_photos(item["folder"]))
-            photos = all_photos
-        else:
-            photos = get_photos(folder)
-
-        if not photos:
-            line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage(text=MSG_NO_PHOTO, quick_reply=main_quick_reply())
-            )
-            return
-
-        reply_with_photo(event, random.choice(photos))
+    reply_with_photo(event, random.choice(photos))
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -163,10 +118,45 @@ def handle_message(event):
     menus = config.get("menus", {})
     msg = event.message.text.strip()
 
-    # 處理隨機指令
+    # 主選單全部隨機 → 抽所有系列所有照片
+    if msg == "__全部隨機__":
+        all_photos = []
+        for items in menus.values():
+            all_photos.extend(collect_photos_from_items(items))
+        # 也包含沒有子選單的主標題
+        for label_item in config["main_labels"]:
+            t = label_item["text"]
+            if t not in menus and t not in ["說明", "help"]:
+                all_photos.extend(get_photos(t))
+        draw_random_from_photos(event, all_photos)
+        return
+
+    # 子選單隨機（格式：{parent}_隨機）
     if msg.endswith("_隨機"):
         parent_text = msg.replace("_隨機", "")
-        handle_random(event, parent_text, menus)
+        if parent_text in menus:
+            photos = collect_photos_from_items(menus[parent_text])
+            draw_random_from_photos(event, photos)
+        else:
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=MSG_NO_PHOTO, quick_reply=main_quick_reply())
+            )
+        return
+
+    # 子子選單隨機（格式：{sub_label}_子隨機）
+    if msg.endswith("_子隨機"):
+        sub_label = msg.replace("_子隨機", "")
+        for items in menus.values():
+            for item in items:
+                if item["label"] == sub_label and item.get("children"):
+                    photos = collect_photos_from_items(item["children"])
+                    draw_random_from_photos(event, photos)
+                    return
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=MSG_NO_PHOTO, quick_reply=main_quick_reply())
+        )
         return
 
     # 檢查主選單指令
@@ -200,9 +190,30 @@ def handle_message(event):
             return
 
     # 檢查子選單指令
-    menu_item = find_menu_item(menus, msg)
+    menu_item, parent_key, parent_item = find_menu_item(menus, msg)
     if menu_item:
-        handle_draw(event, menu_item, menu_item["label"])
+        children = menu_item.get("children", [])
+        if children:
+            # 有子子選單 → 顯示子子選單 + 隨機按鈕
+            random_btn = {"label": "🎲 隨機", "text": f"{menu_item['label']}_子隨機"}
+            back_btn = {"label": "🔙 返回", "text": "說明"}
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(
+                    text=f"請選擇{menu_item['label']}的系列：",
+                    quick_reply=make_quick_reply(children + [random_btn, back_btn])
+                )
+            )
+        else:
+            folder = menu_item.get("folder", "")
+            photos = get_photos(folder) if folder else []
+            if not photos:
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text=MSG_NO_PHOTO, quick_reply=main_quick_reply())
+                )
+                return
+            reply_with_photo(event, random.choice(photos))
         return
 
     # 其他訊息
